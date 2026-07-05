@@ -1,0 +1,22 @@
+{
+  "name": "minpaku-price-bot",
+  "version": "1.0.0",
+  "description": "民泊競合価格調査Bot",
+  "main": "index.js",
+  "scripts": {
+    "scrape": "node scraper.js",
+    "report": "node report.js",
+    "weekly": "node scraper.js && node report.js",
+    "auth": "node auth/get-token.js",
+    "install-browsers": "playwright install chromium"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "googleapis": "^173.0.0",
+    "japanese-holidays": "^1.0.10",
+    "playwright": "^1.61.1"
+  }
+}
