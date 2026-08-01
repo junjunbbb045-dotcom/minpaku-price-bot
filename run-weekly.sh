@@ -15,5 +15,6 @@ LOG_FILE="$LOG_DIR/$TIMESTAMP.log"
   echo "=== minpaku-price-bot run: $TIMESTAMP ==="
   "$NODE_BIN" scraper.js
   "$NODE_BIN" report.js
+  "$NODE_BIN" generate-dashboard.js
   echo "=== done: $(date +%Y-%m-%d-%H%M%S) ==="
 } >> "$LOG_FILE" 2>&1

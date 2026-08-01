@@ -38,5 +38,17 @@ else
 fi
 
 echo ""
+echo "=== ダッシュボード生成: $(date '+%Y-%m-%d %H:%M:%S') ==="
+"$NODE_BIN" generate-dashboard.js
+DASH_STATUS=$?
+
+if [ $DASH_STATUS -eq 0 ]; then
+  echo "ダッシュボードを開きます..."
+  open "$SCRIPT_DIR/dashboard.html"
+else
+  echo "!!! ダッシュボード生成でエラーが発生しました。 !!!"
+fi
+
+echo ""
 echo "このウィンドウを閉じて終了してください。"
 read -r

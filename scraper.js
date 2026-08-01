@@ -178,6 +178,11 @@ async function main() {
 
   const dayRecords = [];
   const weeklyMeta = [];
+  const calendarData = {};
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = formatDate(today);
 
   for (const property of PROPERTIES) {
     console.log(`Fetching calendar: ${property.name}...`);
@@ -185,6 +190,10 @@ async function main() {
     try {
       const calendarDays = await withTimeout(fetchAvailabilityCalendar(page, property.url), 30000);
       calendarMap = new Map(calendarDays.map((d) => [d.date, { available: d.available, minNights: d.minNights }]));
+      // 今日以降の日程のみ保存（ダッシュボード用）
+      calendarData[property.name] = Object.fromEntries(
+        [...calendarMap.entries()].filter(([date]) => date >= todayStr)
+      );
     } catch (err) {
       console.log(`  -> カレンダー取得失敗 (${err.message}). ブラウザを再起動して続行します。`);
       await context.close().catch(() => {});
@@ -250,6 +259,7 @@ async function main() {
         })),
         dayRecords,
         weeklyMeta,
+        calendarData,
       },
       null,
       2,
