@@ -5,6 +5,7 @@ import { uploadMarkdownToDrive } from './lib/drive.js';
 import { DRIVE_INBOX_FOLDER_ID, REPORT_RECIPIENT } from './config/properties.js';
 import { yen, computeWeeklyPropertyStats, buildSubject, GROUPS } from './lib/stats.js';
 import { buildHtmlReport } from './lib/html-report.js';
+import { buildDashboardHtml } from './lib/dashboard-html.js';
 
 const __dirname = import.meta.dirname;
 const DATA_DIR = path.join(__dirname, 'data');
@@ -74,9 +75,10 @@ function buildReport(data) {
   return { markdown: lines.join('\n'), generatedAt, subject, weeklyStats };
 }
 
-function buildFrontMatter({ to, subject, html }) {
+function buildFrontMatter({ to, subject, html, dashboardHtml }) {
   const htmlBodyBase64 = Buffer.from(html, 'utf8').toString('base64');
-  return ['---', `to: ${to}`, `subject: ${subject}`, `htmlBody: ${htmlBodyBase64}`, '---', ''].join('\n');
+  const dashboardBase64 = Buffer.from(dashboardHtml, 'utf8').toString('base64');
+  return ['---', `to: ${to}`, `subject: ${subject}`, `htmlBody: ${htmlBodyBase64}`, `dashboardHtml: ${dashboardBase64}`, '---', ''].join('\n');
 }
 
 async function main() {
@@ -85,7 +87,8 @@ async function main() {
 
   const { markdown, generatedAt, subject, weeklyStats } = buildReport(data);
   const html = buildHtmlReport(data, weeklyStats, subject);
-  const frontMatter = buildFrontMatter({ to: REPORT_RECIPIENT, subject, html });
+  const dashboardHtml = data.calendarData ? buildDashboardHtml(data) : null;
+  const frontMatter = buildFrontMatter({ to: REPORT_RECIPIENT, subject, html, dashboardHtml: dashboardHtml ?? '' });
 
   fs.mkdirSync(REPORTS_DIR, { recursive: true });
   const fileName = `${formatTimestamp(generatedAt)}.md`;
