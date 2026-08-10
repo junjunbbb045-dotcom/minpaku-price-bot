@@ -6,7 +6,10 @@ import { google } from 'googleapis';
 const __dirname = import.meta.dirname;
 const CRED_PATH = path.join(__dirname, '..', 'config', 'client_secret.json');
 const TOKEN_PATH = path.join(__dirname, '..', 'config', 'token.json');
-const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/spreadsheets',
+];
 
 if (!fs.existsSync(CRED_PATH)) {
   console.error(`client_secret.json が見つかりません: ${CRED_PATH}`);
