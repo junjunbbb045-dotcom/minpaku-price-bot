@@ -4,7 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-NODE_BIN="/usr/local/bin/node"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+NODE_BIN="$(command -v node)"
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
 

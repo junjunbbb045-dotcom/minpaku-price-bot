@@ -4,6 +4,7 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 NODE_BIN="$(command -v node)"
 
 echo "民泊競合価格調査Bot を手動実行します"
