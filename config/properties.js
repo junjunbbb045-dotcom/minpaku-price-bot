@@ -20,3 +20,4 @@ export const PROPERTIES = [
 export const DRIVE_INBOX_FOLDER_ID = '1NBsaAd3g35zpK36bAWmyKfAy1AX6SCkz';
 export const DRIVE_PROCESSED_FOLDER_ID = '1EjlLmxEyoFmEvEOT8Hl7EGht3J8kq1Hk';
 export const REPORT_RECIPIENT = 'info.bvr.minpaku@gmail.com';
+export const SHEETS_DASHBOARD_ID = '11S7aq5KwkxxqRG1fxeeBbwS6bO3GDVaWSWhxrwFFgQg';

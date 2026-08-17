@@ -5,3 +5,4 @@ config/token.json
 data/
 reports/
 logs/
+dashboard.html

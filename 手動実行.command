@@ -4,7 +4,7 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-NODE_BIN="/usr/local/bin/node"
+NODE_BIN="$(command -v node)"
 
 echo "民泊競合価格調査Bot を手動実行します"
 echo "（Airbnbへのアクセスを含むため、前回実行から数時間〜翌日空けてから実行してください）"

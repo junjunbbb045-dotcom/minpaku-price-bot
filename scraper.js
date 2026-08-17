@@ -55,7 +55,7 @@ async function createBrowserContext() {
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   });
   const page = await context.newPage();
-  return { context, page };
+  return { browser, context, page };
 }
 
 function buildStayUrl(baseUrl, date, nights, group) {
@@ -174,7 +174,7 @@ async function main() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const observationWeeks = getObservationWeeks();
 
-  let { context, page } = await createBrowserContext();
+  let { browser, context, page } = await createBrowserContext();
 
   const dayRecords = [];
   const weeklyMeta = [];
@@ -196,8 +196,8 @@ async function main() {
       );
     } catch (err) {
       console.log(`  -> カレンダー取得失敗 (${err.message}). ブラウザを再起動して続行します。`);
-      await context.close().catch(() => {});
-      ({ context, page } = await createBrowserContext());
+      await browser.close().catch(() => {});
+      ({ browser, context, page } = await createBrowserContext());
     }
 
     for (const week of observationWeeks) {
@@ -234,8 +234,8 @@ async function main() {
             price: null,
             error: err.message,
           };
-          await context.close().catch(() => {});
-          ({ context, page } = await createBrowserContext());
+          await browser.close().catch(() => {});
+          ({ browser, context, page } = await createBrowserContext());
         }
         dayRecords.push({ ...r, offsetDays: week.offsetDays, category: classifyDay(date) });
         await randomDelay(2000, 5000);
@@ -243,7 +243,7 @@ async function main() {
     }
   }
 
-  await context.close();
+  await browser.close();
 
   const timestamp = formatTimestamp(new Date());
   const outFile = path.join(DATA_DIR, `results-${timestamp}.json`);
