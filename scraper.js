@@ -13,6 +13,7 @@ const DEBUG_DIR = path.join(DATA_DIR, 'debug');
 const PROFILE_DIR = path.join(__dirname, '.pw-profile');
 
 const HEADLESS = process.env.HEADLESS !== 'false';
+const CALENDAR_MAX_ATTEMPTS = 3;
 const NAV_TIMEOUT_MS = 30000;
 const WEEKDAY_SAMPLE_SIZE = 2;
 const WEEKEND_SAMPLE_SIZE = 1;
@@ -187,17 +188,26 @@ async function main() {
   for (const property of PROPERTIES) {
     console.log(`Fetching calendar: ${property.name}...`);
     let calendarMap = new Map();
-    try {
-      const calendarDays = await withTimeout(fetchAvailabilityCalendar(page, property.url), 30000);
+    let calendarDays = null;
+    for (let attempt = 1; attempt <= CALENDAR_MAX_ATTEMPTS && !calendarDays; attempt++) {
+      try {
+        calendarDays = await withTimeout(fetchAvailabilityCalendar(page, property.url), 45000);
+      } catch (err) {
+        const isLast = attempt === CALENDAR_MAX_ATTEMPTS;
+        console.log(
+          `  -> カレンダー取得失敗 (${attempt}/${CALENDAR_MAX_ATTEMPTS}: ${err.message}). ブラウザを再起動して${isLast ? '続行' : '再試行'}します。`,
+        );
+        await browser.close().catch(() => {});
+        ({ browser, context, page } = await createBrowserContext());
+        if (!isLast) await randomDelay(3000, 6000);
+      }
+    }
+    if (calendarDays) {
       calendarMap = new Map(calendarDays.map((d) => [d.date, { available: d.available, minNights: d.minNights }]));
       // 今日以降の日程のみ保存（ダッシュボード用）
       calendarData[property.name] = Object.fromEntries(
         [...calendarMap.entries()].filter(([date]) => date >= todayStr)
       );
-    } catch (err) {
-      console.log(`  -> カレンダー取得失敗 (${err.message}). ブラウザを再起動して続行します。`);
-      await browser.close().catch(() => {});
-      ({ browser, context, page } = await createBrowserContext());
     }
 
     for (const week of observationWeeks) {
