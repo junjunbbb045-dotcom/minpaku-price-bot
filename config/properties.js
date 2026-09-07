@@ -9,6 +9,8 @@ export const PROPERTIES = [
   { name: '大輔１４名', url: 'https://www.airbnb.jp/rooms/772812804993105854', own: false, group: '大箱' },
   { name: '季舟庵１０名', url: 'https://www.airbnb.jp/rooms/19136023', own: false, group: '大箱' },
   { name: 'ペンミン１６名', url: 'https://www.airbnb.jp/rooms/1170623690061493748', own: false, group: '大箱' },
+  { name: '古民家26h滞在12名', url: 'https://www.airbnb.jp/rooms/1313024540205829143', own: false, group: '大箱' },
+  { name: '勝浦新築三日月8名', url: 'https://www.airbnb.jp/rooms/1495987816649942090', own: false, group: '大箱' },
   { name: '八十八６名', url: 'https://www.airbnb.jp/rooms/1218052997640320961', own: false, group: '小箱' },
   { name: 'ピッコラ６名', url: 'https://www.airbnb.jp/rooms/36332717', own: false, group: '小箱' },
   { name: '小波月５名', url: 'https://www.airbnb.jp/rooms/50708343', own: false, group: '小箱' },
