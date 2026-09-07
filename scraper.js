@@ -6,17 +6,25 @@ import { getObservationWeeks, formatDate, weekdayJa, formatTimestamp } from './l
 import { parsePriceFromText } from './lib/extract-price.js';
 import { classifyDay, WEEKDAY, WEEKEND_HOLIDAY } from './lib/day-classifier.js';
 import { fetchAvailabilityCalendar } from './lib/calendar-api.js';
+import {
+  PRICE_MAX_AGE_DAYS,
+  cacheKey,
+  loadPriceCache,
+  savePriceCache,
+  pruneBefore,
+  needsFetch,
+  isStale,
+} from './lib/price-cache.js';
 
 const __dirname = import.meta.dirname;
 const DATA_DIR = path.join(__dirname, 'data');
 const DEBUG_DIR = path.join(DATA_DIR, 'debug');
-const PROFILE_DIR = path.join(__dirname, '.pw-profile');
 
 const HEADLESS = process.env.HEADLESS !== 'false';
 const CALENDAR_MAX_ATTEMPTS = 3;
 const NAV_TIMEOUT_MS = 30000;
-const WEEKDAY_SAMPLE_SIZE = 2;
-const WEEKEND_SAMPLE_SIZE = 1;
+// 1回の実行で価格ページを開く上限。初回は数日かけて埋まり、以降は差分のみになる
+const MAX_FETCH_PER_RUN = Number(process.env.MAX_FETCH_PER_RUN ?? 200);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -32,16 +40,6 @@ function withTimeout(promise, ms) {
     timer = setTimeout(() => reject(new Error(`hard timeout after ${ms}ms`)), ms);
   });
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
-}
-
-function sampleWithoutReplacement(items, n) {
-  const pool = [...items];
-  const picked = [];
-  while (pool.length > 0 && picked.length < n) {
-    const i = Math.floor(Math.random() * pool.length);
-    picked.push(pool.splice(i, 1)[0]);
-  }
-  return picked;
 }
 
 async function createBrowserContext() {
@@ -73,15 +71,7 @@ function buildStayUrl(baseUrl, date, nights, group) {
 // Airbnbが価格を表示しないため、その日のminNightsに合わせて宿泊数を指定する
 async function scrapeOneNight(page, property, date, nights, group) {
   const url = buildStayUrl(property.url, date, nights, group);
-  const result = {
-    name: property.name,
-    own: property.own,
-    group: property.group,
-    date: formatDate(date),
-    dayOfWeek: weekdayJa(date),
-    status: 'error',
-    price: null,
-  };
+  const result = { status: 'error', price: null };
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -119,7 +109,7 @@ async function scrapeOneNight(page, property, date, nights, group) {
       } else {
         result.status = 'unknown';
         fs.mkdirSync(DEBUG_DIR, { recursive: true });
-        const debugFile = path.join(DEBUG_DIR, `${property.name}-${result.date}.png`);
+        const debugFile = path.join(DEBUG_DIR, `${property.name}-${formatDate(date)}.png`);
         await page.screenshot({ path: debugFile }).catch(() => {});
       }
       delete result.error;
@@ -153,41 +143,77 @@ function buildWeekCategoryMeta(week, calendarMap) {
   };
 }
 
-function pickSampleDates(week, calendarMap) {
-  const weekdayAvailable = [];
-  const weekendAvailable = [];
+// 観測期間内の全日について、カレンダー(空室/満室)とキャッシュ(価格)から日別レコードを組み立てる
+function buildDayRecords(weeks, calendarByName, cache, now) {
+  const records = [];
+  for (const property of PROPERTIES) {
+    const calendarMap = calendarByName.get(property.name);
+    for (const week of weeks) {
+      for (const date of week.days) {
+        const dateStr = formatDate(date);
+        const base = {
+          name: property.name,
+          own: property.own,
+          group: property.group,
+          date: dateStr,
+          dayOfWeek: weekdayJa(date),
+          offsetDays: week.offsetDays,
+          category: classifyDay(date),
+        };
 
-  for (const date of week.days) {
-    const dateStr = formatDate(date);
-    if (calendarMap.get(dateStr)?.available !== true) continue;
-    const category = classifyDay(date);
-    if (category === WEEKDAY) weekdayAvailable.push(date);
-    else weekendAvailable.push(date);
+        const cal = calendarMap?.get(dateStr);
+        if (!calendarMap || !cal) {
+          records.push({ ...base, status: 'unfetched', price: null, reason: 'no_calendar' });
+          continue;
+        }
+        if (cal.available !== true) {
+          records.push({ ...base, status: 'sold_out', price: null });
+          continue;
+        }
+
+        const entry = cache[cacheKey(property.name, dateStr)];
+        if (entry?.status === 'available' && entry.price) {
+          records.push({
+            ...base,
+            status: 'available',
+            price: entry.price,
+            nights: entry.nights,
+            fetchedAt: entry.fetchedAt,
+            stale: isStale(entry, now),
+          });
+        } else if (entry?.status === 'sold_out') {
+          records.push({ ...base, status: 'sold_out', price: null, fetchedAt: entry.fetchedAt });
+        } else {
+          records.push({ ...base, status: 'unfetched', price: null, reason: entry?.status ?? 'never' });
+        }
+      }
+    }
   }
-
-  return [
-    ...sampleWithoutReplacement(weekdayAvailable, WEEKDAY_SAMPLE_SIZE),
-    ...sampleWithoutReplacement(weekendAvailable, WEEKEND_SAMPLE_SIZE),
-  ];
+  return records;
 }
 
 async function main() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  const observationWeeks = getObservationWeeks();
-
-  let { browser, context, page } = await createBrowserContext();
-
-  const dayRecords = [];
-  const weeklyMeta = [];
-  const calendarData = {};
-
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   const todayStr = formatDate(today);
 
+  const observationWeeks = getObservationWeeks(today);
+  const windowDates = observationWeeks.flatMap((w) => w.days);
+
+  const cache = loadPriceCache();
+  pruneBefore(cache, todayStr);
+
+  let { browser, context, page } = await createBrowserContext();
+
+  const weeklyMeta = [];
+  const calendarData = {};
+  const calendarByName = new Map();
+
+  // 1. 全物件の空室カレンダーを取得（1物件1リクエストで12ヶ月分）
   for (const property of PROPERTIES) {
     console.log(`Fetching calendar: ${property.name}...`);
-    let calendarMap = new Map();
     let calendarDays = null;
     for (let attempt = 1; attempt <= CALENDAR_MAX_ATTEMPTS && !calendarDays; attempt++) {
       try {
@@ -202,16 +228,18 @@ async function main() {
         if (!isLast) await randomDelay(3000, 6000);
       }
     }
+
+    let calendarMap = new Map();
     if (calendarDays) {
       calendarMap = new Map(calendarDays.map((d) => [d.date, { available: d.available, minNights: d.minNights }]));
+      calendarByName.set(property.name, calendarMap);
       // 今日以降の日程のみ保存（ダッシュボード用）
       calendarData[property.name] = Object.fromEntries(
-        [...calendarMap.entries()].filter(([date]) => date >= todayStr)
+        [...calendarMap.entries()].filter(([date]) => date >= todayStr),
       );
     }
 
     for (const week of observationWeeks) {
-      const meta = buildWeekCategoryMeta(week, calendarMap);
       weeklyMeta.push({
         name: property.name,
         own: property.own,
@@ -219,41 +247,63 @@ async function main() {
         offsetDays: week.offsetDays,
         weekStart: formatDate(week.weekStart),
         weekEnd: formatDate(week.weekEnd),
-        ...meta,
+        ...buildWeekCategoryMeta(week, calendarMap),
       });
+    }
+    await randomDelay(1500, 3000);
+  }
 
-      const sampleDates = pickSampleDates(week, calendarMap);
-      for (const date of sampleDates) {
-        const nights = calendarMap.get(formatDate(date))?.minNights ?? 1;
-        const label = `${property.name} (${formatDate(date)}, ${nights}泊)`;
-        console.log(`Scraping ${label}...`);
-
-        let r;
-        try {
-          r = await withTimeout(scrapeOneNight(page, property, date, nights, property.group), 60000);
-          console.log(`  -> ${r.status} price=${r.price}`);
-        } catch (err) {
-          console.log(`  -> HUNG (${err.message}). ブラウザを再起動して続行します。`);
-          r = {
-            name: property.name,
-            own: property.own,
-            group: property.group,
-            date: formatDate(date),
-            dayOfWeek: weekdayJa(date),
-            status: 'error',
-            price: null,
-            error: err.message,
-          };
-          await browser.close().catch(() => {});
-          ({ browser, context, page } = await createBrowserContext());
-        }
-        dayRecords.push({ ...r, offsetDays: week.offsetDays, category: classifyDay(date) });
-        await randomDelay(2000, 5000);
+  // 2. 空室日のうち、価格が未取得または古いものだけを近い日付から取りに行く
+  const targets = [];
+  let skippedFresh = 0;
+  for (const date of windowDates) {
+    const dateStr = formatDate(date);
+    for (const property of PROPERTIES) {
+      const cal = calendarByName.get(property.name)?.get(dateStr);
+      if (cal?.available !== true) continue;
+      const entry = cache[cacheKey(property.name, dateStr)];
+      if (needsFetch(entry, now)) {
+        targets.push({ property, date, dateStr, nights: cal.minNights ?? 1, isNew: !entry });
+      } else {
+        skippedFresh++;
       }
     }
   }
+  const planned = targets.slice(0, MAX_FETCH_PER_RUN);
+  console.log(
+    `価格取得対象: ${targets.length}件（新規 ${targets.filter((t) => t.isNew).length} / 更新 ${targets.filter((t) => !t.isNew).length}）、` +
+      `キャッシュ有効で省略 ${skippedFresh}件、今回取得 ${planned.length}件（上限 ${MAX_FETCH_PER_RUN}）`,
+  );
+
+  let fetched = 0;
+  for (const t of planned) {
+    const label = `${t.property.name} (${t.dateStr}, ${t.nights}泊)`;
+    console.log(`Scraping ${label}...`);
+    let r;
+    try {
+      r = await withTimeout(scrapeOneNight(page, t.property, t.date, t.nights, t.property.group), 60000);
+      console.log(`  -> ${r.status} price=${r.price}`);
+    } catch (err) {
+      console.log(`  -> HUNG (${err.message}). ブラウザを再起動して続行します。`);
+      r = { status: 'error', price: null, error: err.message };
+      await browser.close().catch(() => {});
+      ({ browser, context, page } = await createBrowserContext());
+    }
+    cache[cacheKey(t.property.name, t.dateStr)] = {
+      status: r.status,
+      price: r.price,
+      nights: t.nights,
+      fetchedAt: new Date().toISOString(),
+      ...(r.error ? { error: r.error } : {}),
+    };
+    savePriceCache(cache);
+    fetched++;
+    await randomDelay(3000, 6000);
+  }
 
   await browser.close();
+
+  const dayRecords = buildDayRecords(observationWeeks, calendarByName, cache, new Date());
 
   const timestamp = formatTimestamp(new Date());
   const outFile = path.join(DATA_DIR, `results-${timestamp}.json`);
@@ -262,8 +312,16 @@ async function main() {
     JSON.stringify(
       {
         scrapedAt: new Date().toISOString(),
+        priceMaxAgeDays: PRICE_MAX_AGE_DAYS,
+        fetchStats: {
+          targets: targets.length,
+          fetched,
+          skippedFresh,
+          remaining: targets.length - planned.length,
+        },
         observationWeeks: observationWeeks.map((w) => ({
           offsetDays: w.offsetDays,
+          label: w.label,
           weekStart: formatDate(w.weekStart),
           weekEnd: formatDate(w.weekEnd),
         })),
@@ -276,6 +334,9 @@ async function main() {
     ),
   );
   console.log(`Saved: ${outFile}`);
+  if (targets.length > planned.length) {
+    console.log(`未取得が ${targets.length - planned.length} 件残っています。次回の実行で続きを取得します。`);
+  }
 }
 
 main().catch((err) => {

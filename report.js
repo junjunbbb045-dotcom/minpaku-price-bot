@@ -30,14 +30,15 @@ function buildGroupSection(group, offsetDays, weeklyStats) {
   const lines = [];
   lines.push(`### ${group}グループ`);
   lines.push('');
-  lines.push('| 物件 | 平日平均 | 土曜・連休平均 | 取得日数 | 満室除外日数 |');
+  lines.push('| 物件 | 平日平均 | 土曜・連休平均 | 価格取得日数 | 満室日数 |');
   lines.push('|---|---|---|---|---|');
 
+  const priceText = (value, note) => (value == null ? (note ?? 'データなし') : yen(value));
   for (const r of [...own, ...competitors]) {
     const prefix = r.own ? '★ ' : '';
-    const weekday = r.noDataFlag ? 'データなし' : yen(r.weekdayAverage);
-    const weekendHoliday = r.weekendHolidayAverage == null ? 'データなし' : yen(r.weekendHolidayAverage);
-    lines.push(`| ${prefix}${r.name} | ${weekday} | ${weekendHoliday} | ${r.fetchedDays} | ${r.soldOutExcludedDays} |`);
+    const weekday = priceText(r.weekdayAverage, r.weekdayNote);
+    const weekendHoliday = priceText(r.weekendHolidayAverage, r.weekendHolidayNote);
+    lines.push(`| ${prefix}${r.name} | ${weekday} | ${weekendHoliday} | ${r.fetchedDays} | ${r.soldOutDays} |`);
   }
 
   lines.push('');
@@ -46,7 +47,7 @@ function buildGroupSection(group, offsetDays, weeklyStats) {
 
 function buildSection(week, weeklyStats) {
   const lines = [];
-  lines.push(`## +${week.offsetDays}日後の週: ${week.weekStart} 〜 ${week.weekEnd}`);
+  lines.push(`## ${week.label}: ${week.weekStart} 〜 ${week.weekEnd}`);
   lines.push('');
   for (const group of GROUPS) {
     lines.push(buildGroupSection(group, week.offsetDays, weeklyStats));
@@ -66,6 +67,7 @@ function buildReport(data) {
   lines.push(`- 実行日時: ${generatedAt.toLocaleString('ja-JP')}`);
   lines.push(`- 取得日時(scraper): ${new Date(data.scrapedAt).toLocaleString('ja-JP')}`);
   lines.push('- 宿泊人数: 大人2名（1泊）');
+  lines.push(`- 価格は空室日すべてを対象に、取得後${data.priceMaxAgeDays ?? 5}日以内のものを使用（満室日は平均から除外）`);
   lines.push('');
 
   for (const week of data.observationWeeks) {
@@ -81,6 +83,8 @@ function buildFrontMatter({ to, subject, html }) {
 }
 
 async function main() {
+  // --email 指定時のみDriveへアップロードしGASがメール送信する（毎日の実行ではスプレッドシート更新のみ）
+  const sendEmail = process.argv.includes('--email');
   const latestFile = findLatestResultsFile();
   const data = JSON.parse(fs.readFileSync(latestFile, 'utf8'));
 
@@ -99,6 +103,7 @@ async function main() {
   if (data.calendarData) {
     try {
       sheetsUrl = await updateSheetsDashboard(data, priceLookup);
+      console.log(`スプレッドシートを更新しました: ${sheetsUrl}`);
     } catch (err) {
       console.warn('スプレッドシート更新失敗（メール送信は続行）:', err.message);
     }
@@ -113,6 +118,10 @@ async function main() {
   fs.writeFileSync(outFile, frontMatter + markdown, 'utf8');
   console.log(`レポートを保存しました: ${outFile}`);
 
+  if (!sendEmail) {
+    console.log('（--email 未指定のためDriveへのアップロード・メール送信はスキップ）');
+    return;
+  }
   const uploaded = await uploadMarkdownToDrive(outFile, DRIVE_INBOX_FOLDER_ID);
   console.log(`Driveにアップロードしました: ${uploaded.name} (${uploaded.id})`);
 }

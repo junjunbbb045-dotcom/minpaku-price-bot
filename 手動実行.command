@@ -27,7 +27,7 @@ fi
 
 echo ""
 echo "=== レポート作成・送信を開始: $(date '+%Y-%m-%d %H:%M:%S') ==="
-"$NODE_BIN" report.js
+"$NODE_BIN" report.js --email
 REPORT_STATUS=$?
 
 echo ""

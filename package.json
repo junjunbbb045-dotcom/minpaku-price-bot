@@ -6,7 +6,8 @@
   "scripts": {
     "scrape": "node scraper.js",
     "report": "node report.js",
-    "weekly": "node scraper.js && node report.js",
+    "daily": "node scraper.js && node report.js",
+    "weekly": "node scraper.js && node report.js --email",
     "auth": "node auth/get-token.js",
     "install-browsers": "playwright install chromium"
   },
