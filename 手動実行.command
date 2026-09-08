@@ -46,6 +46,9 @@ DASH_STATUS=$?
 if [ $DASH_STATUS -eq 0 ]; then
   echo "ダッシュボードを開きます..."
   open "$SCRIPT_DIR/dashboard.html"
+  echo ""
+  echo "=== ダッシュボード公開: $(date '+%Y-%m-%d %H:%M:%S') ==="
+  "$SCRIPT_DIR/deploy-dashboard.sh" || echo "!!! ダッシュボードの公開に失敗しました。 !!!"
 else
   echo "!!! ダッシュボード生成でエラーが発生しました。 !!!"
 fi

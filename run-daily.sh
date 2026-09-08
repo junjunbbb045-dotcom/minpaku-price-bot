@@ -23,5 +23,6 @@ fi
   "$NODE_BIN" scraper.js
   "$NODE_BIN" report.js "${REPORT_ARGS[@]}"
   "$NODE_BIN" generate-dashboard.js
+  "$SCRIPT_DIR/deploy-dashboard.sh" || echo "!!! ダッシュボードの公開に失敗しました（他の処理は完了） !!!"
   echo "=== done: $(date +%Y-%m-%d-%H%M%S) ==="
 } >> "$LOG_FILE" 2>&1

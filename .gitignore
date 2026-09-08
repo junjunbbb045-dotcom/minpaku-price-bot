@@ -6,3 +6,6 @@ data/
 reports/
 logs/
 dashboard.html
+site/
+config/cloudflare.env
+.wrangler/

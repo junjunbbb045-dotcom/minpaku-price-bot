@@ -9,6 +9,9 @@
     "daily": "node scraper.js && node report.js",
     "weekly": "node scraper.js && node report.js --email",
     "auth": "node auth/get-token.js",
+    "dashboard": "node generate-dashboard.js",
+    "deploy": "./deploy-dashboard.sh",
+    "access": "node setup-access.mjs",
     "install-browsers": "playwright install chromium"
   },
   "keywords": [],
@@ -19,5 +22,8 @@
     "googleapis": "^173.0.0",
     "japanese-holidays": "^1.0.10",
     "playwright": "^1.61.1"
+  },
+  "devDependencies": {
+    "wrangler": "^4.129.1"
   }
 }

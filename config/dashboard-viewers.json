@@ -1,0 +1,8 @@
+{
+  "applicationName": "minpaku-dashboard",
+  "sessionDuration": "24h",
+  "allowedEmails": [
+    "junjun.bbb.045@gmail.com",
+    "info.bvr.minpaku@gmail.com"
+  ]
+}

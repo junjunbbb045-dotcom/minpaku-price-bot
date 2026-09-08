@@ -27,3 +27,8 @@ const html = buildDashboardHtml(data);
 const outFile = path.join(__dirname, 'dashboard.html');
 fs.writeFileSync(outFile, html, 'utf8');
 console.log(`生成完了: ${outFile}`);
+
+// Cloudflare Pages 公開用（deploy-dashboard.sh がこのディレクトリをアップロードする）
+const siteDir = path.join(__dirname, 'site');
+fs.mkdirSync(siteDir, { recursive: true });
+fs.writeFileSync(path.join(siteDir, 'index.html'), html, 'utf8');
